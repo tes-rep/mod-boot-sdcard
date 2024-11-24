@@ -95,6 +95,7 @@ jobs:
         boot=$(sudo cat boot/boot.ini | grep dtb | awk -F "/" '{print $4}' | cut -d'"' -f1)
         sudo sed -i "s/$boot/$dtb/g" boot/boot.ini
         sudo sed -i "s/$boot/$dtb/g" boot/extlinux/extlinux.conf
+        sudo sed -i "s/$boot/$dtb/g" boot/uEnv.txt
         sudo umount ${device}p1
         sleep 1
         sudo dd if=u-boot.bin of=${device} bs=1 count=444 conv=fsync 2>/dev/null
