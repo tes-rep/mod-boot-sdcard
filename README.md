@@ -1,7 +1,6 @@
 ***MOD BOOT SDCARD***
 
 **Cara Pasang Manual:**
-
 * Buka partisi boot pada sdcard openwrt
 * Copy isi repository ini kedalam partisi boot
 * Buka folder ```extlinux``` edit ```extlinux.conf``` ganti ```UUID``` sesuai dengan yang ada di ```uEnv.txt```
@@ -11,7 +10,6 @@
 * Done
 
 **Cara Pasang Via Github Action:**
-
 * Fork Repository ini
 * Buka Tab Actions Pada Repository yang sudah anda fork
 * Pilih Mod SDCard
