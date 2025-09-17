@@ -30,7 +30,7 @@ jobs:
         PWD=$(pwd)
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo -E apt-get -qq update
-        sudo apt-get -qq install libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev rsync unzip tar gzip
+        sudo apt-get -qq install libncurses5-dev libncursesw5-dev zlib1g-dev gawk git libssl-dev rsync unzip tar gzip
         sudo apt-get -qq install jq python3 python3-pip
         sudo -E apt-get -y install wget
         sudo -E apt-get -qq autoremove --purge
