@@ -30,7 +30,9 @@ jobs:
         PWD=$(pwd)
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo -E apt-get -qq update
-        sudo -E apt-get -y install wget python3
+        sudo apt-get -qq install build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip tar gzip qemu-utils mkisofs
+        sudo apt-get -qq install jq python3 python3-pip
+        sudo -E apt-get -y install wget
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo pip3 install gdown
