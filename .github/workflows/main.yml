@@ -19,7 +19,7 @@ on:
 
 jobs:
   setup:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout Repository
@@ -34,8 +34,8 @@ jobs:
         sudo -E apt-get -qq autoremove --purge > /dev/null 2>&1
         sudo -E apt-get -qq clean > /dev/null 2>&1
         sudo pip3 install gdown > /dev/null 2>&1
-        sudo pip3 install git+https://github.com/Juvenal-Yescas/mediafire-dl > /dev/null 2>&1
-        wget https://mega.nz/linux/repo/xUbuntu_22.04/amd64/megacmd-xUbuntu_22.04_amd64.deb && sudo apt install "$PWD/megacmd-xUbuntu_22.04_amd64.deb" > /dev/null 2>&1
+        sudo pip3 install git+https://github.com/Juvenal-Yescas/mediafire-dl
+        wget https://mega.nz/linux/repo/xUbuntu_24.04/amd64/megacmd-xUbuntu_24.04_amd64.deb && sudo apt install "$PWD/megacmd-xUbuntu_24.04_amd64.deb"
         sudo mkdir -p openwrt > /dev/null 2>&1
 
     - name: Download Firmware
