@@ -1,0 +1,213 @@
+name: Mod SDcard23
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      bootloader:
+        description: "Select Bootloader"
+        required: true
+        default: "b860h"
+        type: choice
+        options:
+          - b860h
+          - hg680p
+      fw_link:
+        description: "Insert Firmware Link"
+        required: true
+        default: ""
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: SetUp environment
+      env:
+          DEBIAN_FRONTEND: noninteractive
+      run: |
+          set -euo pipefail
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip tar gzip xz-utils qemu-utils mkisofs file jq python3 python3-pip
+          sudo pip3 install gdown
+          sudo pip3 install git+https://github.com/Juvenal-Yescas/mediafire-dl
+          wget -q https://mega.nz/linux/repo/xUbuntu_24.04/amd64/megacmd-xUbuntu_24.04_amd64.deb && sudo apt install -y "$PWD/megacmd-xUbuntu_24.04_amd64.deb"
+          sudo mkdir -p openwrt
+
+    - name: Download Firmware (normalize to openwrt/firmware_download)
+      run: |
+        set -euo pipefail
+        mkdir -p openwrt
+        FW_LINK="${{ github.event.inputs.fw_link }}"
+        OUT="openwrt/firmware_download"
+
+        if echo "$FW_LINK" | grep -q "drive.google.com"; then
+          # try parsing /d/<id>/ or ?id=<id>
+          file_id=$(echo "$FW_LINK" | sed -n 's#.*/d/\([^/?]*\).*#\1#p')
+          if [ -z "$file_id" ]; then
+            file_id=$(echo "$FW_LINK" | sed -n 's/.*id=\([^&]*\).*/\1/p')
+          fi
+          if [ -z "$file_id" ]; then
+            echo "❌ Failed to parse Google Drive link: $FW_LINK"
+            exit 1
+          fi
+          echo "Downloading from Google Drive (id=$file_id)"
+          sudo gdown "https://drive.google.com/uc?id=${file_id}" -O "$OUT"
+
+        elif echo "$FW_LINK" | grep -q "mediafire.com"; then
+          echo "Downloading from Mediafire"
+          sudo mediafire-dl "$FW_LINK" -o "$OUT"
+
+        elif echo "$FW_LINK" | grep -q "mega.nz"; then
+          echo "Downloading from Mega.nz"
+          file_mega=$(sudo mega-get "$FW_LINK" | awk -F: '{print $2}')
+          sudo mv "$file_mega" "$OUT"
+
+        else
+          echo "Downloading with wget"
+          sudo wget --no-check-certificate "$FW_LINK" -O "$OUT"
+        fi
+
+    - name: Normalize firmware filename & detect compression
+      id: detect_firmware
+      run: |
+        set -euo pipefail
+        if [ ! -f openwrt/firmware_download ]; then
+          echo "Firmware file not found"
+          exit 1
+        fi
+
+        ctype=$(python3 - <<'PY'
+        import sys,os
+        f='openwrt/firmware_download'
+        try:
+        b=open(f,'rb').read(6)
+        except Exception:
+        sys.exit(2)
+        if b.startswith(b'\x1f\x8b'):
+        print('img.gz')
+        elif b.startswith(b'\xfd7zXZ\x00'):
+        print('img.xz')
+        else:
+        print('img')
+        PY
+        )
+        echo "detected: $ctype"
+        if [ "$ctype" = "img.gz" ]; then
+          mv openwrt/firmware_download openwrt/firmware.img.gz
+        elif [ "$ctype" = "img.xz" ]; then
+          mv openwrt/firmware_download openwrt/firmware.img.xz
+        else
+          mv openwrt/firmware_download openwrt/firmware.img
+        fi
+        echo "file_type=$ctype" >> $GITHUB_ENV
+        echo "file_name=firmware.img" >> $GITHUB_ENV
+
+    - name: Extract firmware (mount, inject, replace dtb)
+      run: |
+        set -euo pipefail
+        cd openwrt
+        sudo mkdir -p boot
+
+        # copy u-boot.bin if available in repo locations
+        if [ -f ../BootCardMaker/u-boot.bin ]; then
+          sudo cp ../BootCardMaker/u-boot.bin .
+        elif [ -f files/BootCardMaker/u-boot.bin ]; then
+          sudo cp files/BootCardMaker/u-boot.bin .
+        fi
+
+        # move mod tar if present inside repo
+        if [ -f files/mod-boot-sdcard.tar.gz ]; then
+          sudo mv files/mod-boot-sdcard.tar.gz .
+        fi
+
+        # decompress if needed
+        if [ "${file_type:-}" = "img.gz" ]; then
+          sudo gunzip firmware.img.gz
+        elif [ "${file_type:-}" = "img.xz" ]; then
+          sudo unxz firmware.img.xz
+        fi
+
+        if [ ! -f firmware.img ]; then
+          echo "Uncompressed firmware.img not found"
+          exit 1
+        fi
+
+        # setup loop device and mount
+        device=$(sudo losetup -fP --show firmware.img)
+        sudo mount ${device}p1 boot
+
+        if [ -f mod-boot-sdcard.tar.gz ]; then
+          sudo tar -xzvf mod-boot-sdcard.tar.gz -C boot
+        fi
+
+        # try to replace root= from uEnv to extlinux if both exist
+        uenv="$(sudo sh -c 'grep APPEND boot/uEnv.txt || true' | awk -F"root=" '{print $2}' || true)"
+        extlinux="$(sudo sh -c 'grep append boot/extlinux/extlinux.conf || true' | awk -F"root=" '{print $2}' || true)"
+        if [ -n "$uenv" ] && [ -n "$extlinux" ]; then
+          sudo sed -i "s|$extlinux|$uenv|g" boot/extlinux/extlinux.conf || true
+        fi
+
+        # select dtb based on input
+        if [ "${{ github.event.inputs.bootloader }}" = "b860h" ]; then
+          dtb="meson-gxl-s905x-b860h.dtb"
+        elif [ "${{ github.event.inputs.bootloader }}" = "hg680p" ]; then
+          dtb="meson-gxl-s905x-p212.dtb"
+        fi
+
+        if [ -f boot/boot.ini ]; then
+          bootname=$(sudo grep -oP 'dtb/[^"\n]+' boot/boot.ini | awk -F'/' '{print $NF}' | head -n1 || true)
+          if [ -n "$bootname" ]; then
+            sudo sed -i "s/$bootname/$dtb/g" boot/boot.ini || true
+            sudo sed -i "s/$bootname/$dtb/g" boot/extlinux/extlinux.conf || true
+            sudo sed -i "s/$bootname/$dtb/g" boot/uEnv.txt || true
+          fi
+        fi
+
+        sudo umount ${device}p1 || true
+        sync
+
+        # write u-boot to image
+        if [ -f u-boot.bin ]; then
+          sudo dd if=u-boot.bin of=${device} bs=1 count=444 conv=fsync 2>/dev/null || true
+          sudo dd if=u-boot.bin of=${device} bs=512 skip=1 seek=1 conv=fsync 2>/dev/null || true
+        fi
+
+        sudo losetup -d ${device} || true
+
+        # recompress back to original format if needed
+        if [ "${file_type:-}" = "img.gz" ]; then
+          sudo gzip firmware.img
+        elif [ "${file_type:-}" = "img.xz" ]; then
+          sudo xz -z firmware.img
+        fi
+
+    - name: Find Firmware
+      id: find_firmware
+      run: |
+        set -euo pipefail
+        if [ -f openwrt/firmware.img.gz ]; then
+          fp=openwrt/firmware.img.gz
+        elif [ -f openwrt/firmware.img.xz ]; then
+          fp=openwrt/firmware.img.xz
+        else
+          fp=openwrt/firmware.img
+        fi
+        echo "file_path=$fp" >> $GITHUB_OUTPUT
+        echo "FILE_PATH path: $fp"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.TOKEN_GITHUB }}
+      with:
+        name: houjie-Wrt_Mod_SDCard
+        tag_name: mod-sdcard-${{ github.run_id }}
+        draft: false
+        prerelease: false
+        files: ${{ steps.find_firmware.outputs.file_path }}
+        body: |
+          Mod SDCard
