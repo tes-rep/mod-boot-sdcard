@@ -71,7 +71,7 @@ jobs:
           sudo wget --no-check-certificate "$FW_LINK" -O "$OUT"
         fi
 
-    - name: Normalize firmware filename & detect compression
+        - name: Normalize firmware filename & detect compression
       id: detect_firmware
       run: |
         set -euo pipefail
@@ -80,31 +80,23 @@ jobs:
           exit 1
         fi
 
-        ctype=$(python3 - <<'PY'
-        import sys,os
-        f='openwrt/firmware_download'
-        try:
-        b=open(f,'rb').read(6)
-        except Exception:
-        sys.exit(2)
-        if b.startswith(b'\x1f\x8b'):
-        print('img.gz')
-        elif b.startswith(b'\xfd7zXZ\x00'):
-        print('img.xz')
-        else:
-        print('img')
-        PY
-        )
-        echo "detected: $ctype"
-        if [ "$ctype" = "img.gz" ]; then
+        ctype=$(file -b --mime-type openwrt/firmware_download)
+        if [[ "$ctype" == "application/gzip" ]]; then
+          echo "detected: img.gz"
           mv openwrt/firmware_download openwrt/firmware.img.gz
-        elif [ "$ctype" = "img.xz" ]; then
+          echo "file_type=img.gz" >> $GITHUB_ENV
+        elif [[ "$ctype" == "application/x-xz" ]]; then
+          echo "detected: img.xz"
           mv openwrt/firmware_download openwrt/firmware.img.xz
+          echo "file_type=img.xz" >> $GITHUB_ENV
         else
+          echo "detected: raw img"
           mv openwrt/firmware_download openwrt/firmware.img
+          echo "file_type=img" >> $GITHUB_ENV
         fi
-        echo "file_type=$ctype" >> $GITHUB_ENV
+
         echo "file_name=firmware.img" >> $GITHUB_ENV
+
 
     - name: Extract firmware (mount, inject, replace dtb)
       run: |
