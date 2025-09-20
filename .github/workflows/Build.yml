@@ -1,4 +1,4 @@
-name: Mod SDcard23
+name: Mod SDcard23ty
 
 on:
   repository_dispatch:
@@ -71,7 +71,7 @@ jobs:
           sudo wget --no-check-certificate "$FW_LINK" -O "$OUT"
         fi
 
-        - name: Normalize firmware filename & detect compression
+    - name: Normalize firmware filename & detect compression
       id: detect_firmware
       run: |
         set -euo pipefail
