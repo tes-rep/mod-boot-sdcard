@@ -83,15 +83,15 @@ jobs:
         ctype=$(file -b --mime-type openwrt/firmware_download)
         if [[ "$ctype" == "application/gzip" ]]; then
           echo "detected: img.gz"
-          mv openwrt/firmware_download openwrt/firmware.img.gz
+          sudo mv openwrt/firmware_download openwrt/firmware.img.gz
           echo "file_type=img.gz" >> $GITHUB_ENV
         elif [[ "$ctype" == "application/x-xz" ]]; then
           echo "detected: img.xz"
-          mv openwrt/firmware_download openwrt/firmware.img.xz
+          sudo mv openwrt/firmware_download openwrt/firmware.img.xz
           echo "file_type=img.xz" >> $GITHUB_ENV
         else
           echo "detected: raw img"
-          mv openwrt/firmware_download openwrt/firmware.img
+          sudo mv openwrt/firmware_download openwrt/firmware.img
           echo "file_type=img" >> $GITHUB_ENV
         fi
 
